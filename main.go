@@ -1,23 +1,32 @@
 package main
 
 import (
-	"encoding/json"
+	"io/ioutil"
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 )
 
-// For HMAC signing method, the key can be any []byte. It is recommended to generate
-// a key using crypto/rand or something equivalent. You need the same key for signing
-// and validating.
-var hmacSecret = []byte("secret")
+var keyData []byte
 
 type Request struct {
-	jwt.StandardClaims
+	Audience  string `json:"aud,omitempty"`
+	ExpiresAt int64  `json:"exp,omitempty"`
+	Id        string `json:"jti,omitempty"`
+	IssuedAt  int64  `json:"iat,omitempty"`
+	Issuer    string `json:"iss,omitempty"`
+	NotBefore int64  `json:"nbf,omitempty"`
+	Subject   string `json:"sub,omitempty"`
+}
+
+func init() {
+	var err error
+	if keyData, err = ioutil.ReadFile("/private.key"); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (r *Request) Valid() error {
@@ -37,44 +46,40 @@ func checkCookieHeader(r *http.Request) bool {
 func jwtProxyHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		err   error
-		body  []byte
 		token string
 	)
-
-	req := &Request{}
 
 	if !checkCookieHeader(r) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	if body, err = ioutil.ReadAll(r.Body); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	req.IssuedAt = time.Now().Add(1 * time.Hour).Unix()
-	if err = json.Unmarshal(body, req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	req := &Request{
+		Subject: r.Header.Get("sub"),
+		Issuer: r.Header.Get("iss"),
+		Audience: r.Header.Get("aud"),
+		ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+		IssuedAt: time.Now().Unix(),
 	}
 
 	log.Print(fmt.Sprintf("Request: %+v", req))
 
+	key, _ := jwt.ParseRSAPrivateKeyFromPEM(keyData)
 	// Sign and get the complete encoded token as a string using the secret
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, req)
-	if token, err = t.SignedString(hmacSecret); err != nil {
+	t := jwt.NewWithClaims(jwt.GetSigningMethod("RS512"), req)
+	if token, err = t.SignedString(key); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Authorization", fmt.Sprintf("JWT %s", token))
+	w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	fmt.Fprintf(w, "")
 }
 
 func main() {
 	r := mux.NewRouter()
 	r.PathPrefix("/").HandlerFunc(jwtProxyHandler)
+
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         ":8080",

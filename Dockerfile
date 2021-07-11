@@ -9,6 +9,7 @@ RUN go build -o /proxy
 
 FROM alpine:latest
 WORKDIR /
+COPY keys/private.key .
 COPY --from=build /proxy /proxy
 EXPOSE 8080
 CMD ["/proxy"]

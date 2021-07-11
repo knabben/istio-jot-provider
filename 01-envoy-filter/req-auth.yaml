@@ -1,0 +1,48 @@
+apiVersion: "security.istio.io/v1beta1"
+kind: RequestAuthentication
+metadata:
+  name: reqauth
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  jwtRules:
+    - issuer: "issuer"
+      forwardOriginalToken: true
+      fromHeaders:
+        - name: Authorization
+          prefix: "JWT "
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: app-gw
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  action: DENY
+  rules:
+    - from:
+      - source:
+          notRequestPrincipals: ["*"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: httpbin
+  namespace: default
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      app: httpbin  # default ingress
+  rules:
+    - from:
+      - source:
+          requestPrincipals: [ "issuer/*" ]
+      to:
+        - operation:
+            methods: ["GET", "POST"]

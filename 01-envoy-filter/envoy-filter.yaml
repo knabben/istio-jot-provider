@@ -1,0 +1,42 @@
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: ext-authz-filter
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway  # default ingress
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.ext_authz
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz"
+            http_service:
+              server_uri:
+                uri: http://auth-proxy.istio-system:8080
+                cluster: outbound|8080||auth-proxy.istio-system.svc.cluster.local
+                timeout:  1s
+              authorization_request:
+                allowed_headers:
+                  patterns:
+                    - exact: cookie
+                    - exact: sub
+                    - exact: aud
+                    - exact: iss
+              authorization_response:
+                allowed_upstream_headers:
+                  patterns:
+                    - exact: authorization

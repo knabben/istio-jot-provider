@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - image: knabben/proxy:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           name: auth-proxy
           ports:
             - containerPort: 8080

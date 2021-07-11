@@ -60,7 +60,7 @@ Validating the authorizer service usage, the IAT is set to expire in 1 hour.
 
 ```
 ❯ kubectl -n default exec -it deploy/sleep -- curl auth-proxy.istio-system:8080/proxy \
-    -H "Cookie: value" -d'{"sub": "system"}' -v
+    -H "Cookie: value" -H "Sub: subject" -H "Aud: audience" -v
 
 *   Trying 10.96.173.134:8080...
 * Connected to auth-proxy.istio-system (10.96.173.134) port 8080 (#0)
@@ -74,7 +74,7 @@ Validating the authorizer service usage, the IAT is set to expire in 1 hour.
 > 
 * Mark bundle as not supporting multiuse
 < HTTP/1.1 200 OK
-< Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2MjYwMTkzMjYsInN1YiI6InN5c3RlbSJ9.WY2a4EbIoqR6kgwLOaAH9nslc2Yu9GzDT7DOyiguRRE
+< Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImV4cCI6MTYyNjAyNjg2NywiaWF0IjoxNjI2MDIzMjY3LCJzdWIiOiJzdWJqZWN0In0.gliLIgNPNop5arA_CONY0ewgGnEDF1jnRyd0RQ4xB_A
 < Date: Sun, 11 Jul 2021 15:02:06 GMT
 < Content-Length: 0
 < 
@@ -111,13 +111,90 @@ $ curl -X GET "http://172.18.0.40/headers" -H "accept: application/json"        
 
 ## 001 - EnvoyFilter CRD
 
-Using EnvoyFilter CRD
+Using EnvoyFilter CRD in the wildcards request path of the authentication service:
 
-## 010 - AuthorizationPolicy CUSTOM filter 
+```
+$ kubectl apply -f 01-envoy-filter/envoy-filter.yaml
+$ kubectl -n istio-system get envoyfilter ext-authz-filter -o yam
 
-Using AuthorizationPolicy with `action: CUSTOM`
+...
+typed_config:
+  '@type': type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+  http_service:
+    authorization_request:
+      allowed_headers:
+        patterns:
+        - exact: cookie
+        - exact: sub
+        - exact: aud
+        - exact: iss
+    authorization_response:
+      allowed_upstream_headers:
+        patterns:
+        - exact: authorization
+    server_uri:
+      cluster: outbound|8080||auth-proxy.istio-system.svc.cluster.local
+      timeout: 1s
+      uri: http://auth-proxy.istio-system:8080
+...
+```
 
-## Cleaning up
+Testing the request in the httpbin:
+
+```
+# -- Without authentication
+
+$ http 172.18.0.40/anything
+HTTP/1.1 401 Unauthorized
+
+# -- With authentication
+
+$ http 172.18.0.40/anything cookie:anyvalue sub:subject aud:audience iss:issuer
+HTTP/1.1 200 OK
+
+{
+    "headers": {
+        "Authorization": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImV4cCI6MTYyNjAyNzIyMCwiaWF0IjoxNjI2MDIzNjIwLCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJzdWJqZWN0In0.YyAwJsP2wRZLA6MXVvbqaVcqRCeHrbK7rPRkBUrkEZ0",
+    }
+}
+
+```
+
+Analyzing the JWT data generated:
+
+```
+# Header
+
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+
+# Payload
+
+{
+  "aud": "audience",
+  "exp": 1626027220,
+  "iat": 1626023620,
+  "iss": "issuer",
+  "sub": "subject"
+}
+
+```
+
+Forcing the policy in the service:
+
+```
+
+```
+
+Cleaning up the added final filter.
+
+```
+$ kubectl -n istio-system delete envoyfilter ext-authz-filter
+```
+
+## Cleaning up istio-system
 
 ```
 $ ./hack/cleanup.sh
@@ -129,4 +206,5 @@ $ kind delete cluster --name calico-2021-07-11-sg33lz
 * MetalLB - https://github.com/K8sbykeshed/k8s-service-lb-validator
 * Kind bootstrap - https://github.com/thekubeworld/k8s-local-dev
 * Istio In Action - https://github.com/istioinaction/book-source-code/
+*https://istio.io/latest/docs/tasks/security/authorization/authz-jwt/
 * EnvoyFilter example - https://github.com/thiagocaiubi/playground/tree/main/istio-okta
