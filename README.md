@@ -26,7 +26,7 @@ $ ./hack/setup-istio.sh
 Thank you for installing Istio 1.10.  Please take a few minutes to tell us about your install/upgrade experience!  https://forms.gle/KjkrDnMPByq7akrYA
 ```
 
-### Compiling image
+### Compiling image and installation
 
 Compile the proxy image (authentication service) and install the deployment, the service
 will be installed under `istio-system`.
@@ -40,22 +40,42 @@ Is expected to receive a `Cookie: anyvalue` header and the reponse will return a
 `Authorization: JWT ...` header, the payload can control the following claims: 
 
 ```
-	Audience  string `json:"aud,omitempty"`
-	ExpiresAt int64  `json:"exp,omitempty"`
-	Id        string `json:"jti,omitempty"`
-	Issuer    string `json:"iss,omitempty"`
-	NotBefore int64  `json:"nbf,omitempty"`
-	Subject   string `json:"sub,omitempty"`
+Audience  string `json:"aud,omitempty"`
+ExpiresAt int64  `json:"exp,omitempty"`
+Id        string `json:"jti,omitempty"`
+Issuer    string `json:"iss,omitempty"`
+NotBefore int64  `json:"nbf,omitempty"`
+Subject   string `json:"sub,omitempty"`
 ```
 
-An example of usage, the IAT is set to expire in 1 hour.
+Install the client helper:
 
 ```
- http localhost:8080/proxy Cookie:anyvaluehere aud=myaudience sub=system
-HTTP/1.1 200 OK
-Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJteWF1ZGllbmNlIiwiaWF0IjoxNjI2MDE4MDA5LCJzdWIiOiJzeXN0ZW0ifQ.6CQf3_YDZVSyvaqfdU4Wq7sOSBff0U6TL8SAyCa-p6s
-Content-Length: 0
-Date: Sun, 11 Jul 2021 14:40:09 GMT
+kubectl apply -f https://raw.githubusercontent.com/istioinaction/book-source-code/8dad67e5f1939b0f9dc22b7d6204709cf96d1cc1/ch9/sleep.yaml
+```
+
+Validating the authorizer service usage, the IAT is set to expire in 1 hour.
+
+```
+❯ kubectl -n default exec -it deploy/sleep -- curl auth-proxy.istio-system:8080/proxy \
+    -H "Cookie: value" -d'{"sub": "system"}' -v
+
+*   Trying 10.96.173.134:8080...
+* Connected to auth-proxy.istio-system (10.96.173.134) port 8080 (#0)
+> POST /proxy HTTP/1.1
+> Host: auth-proxy.istio-system:8080
+> User-Agent: curl/7.77.0
+> Accept: */*
+> Cookie: value
+> Content-Length: 17
+> Content-Type: application/x-www-form-urlencoded
+> 
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE2MjYwMTkzMjYsInN1YiI6InN5c3RlbSJ9.WY2a4EbIoqR6kgwLOaAH9nslc2Yu9GzDT7DOyiguRRE
+< Date: Sun, 11 Jul 2021 15:02:06 GMT
+< Content-Length: 0
+< 
 ```
 
 ## 001 - EnvoyFilter CRD
