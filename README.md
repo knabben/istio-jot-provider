@@ -2,12 +2,14 @@
 
 ## Initialing the environment
 
-Setting up a cluster with Calico CNI
+Setting up a cluster with Calico CNI and MetalLB
 
 ```
 # Using https://github.com/thekubeworld/k8s-local-dev
 $ ./k8s-local-dev calico
 $ kind get clusters
+$ ~/go/src/github.com/k8sbykeshed/k8s-service-lb-validator/hack/install_metallb.sh`
+
 calico-2021-07-11-sg33lz
 ```
 
@@ -26,7 +28,7 @@ $ ./hack/setup-istio.sh
 Thank you for installing Istio 1.10.  Please take a few minutes to tell us about your install/upgrade experience!  https://forms.gle/KjkrDnMPByq7akrYA
 ```
 
-### Compiling image and installation
+### Install the authentication service
 
 Compile the proxy image (authentication service) and install the deployment, the service
 will be installed under `istio-system`.
@@ -78,17 +80,53 @@ Validating the authorizer service usage, the IAT is set to expire in 1 hour.
 < 
 ```
 
+### Install the end-user accessible service
+
+Applying the north-south service without any authentication filter,
+accessed via the Ingress Gateway, the LB external IP is on `172.18.0.40`:  
+
+```
+$ kubectl apply -f service/httpbin.yaml
+$ istioctl -nistio-system proxy-config routes deploy/istio-ingressgateway                                                                                                                                                           [13:08:10]
+NAME        DOMAINS     MATCH                  VIRTUAL SERVICE
+http.80     *           /*                     httpbin-virtualservice.default
+
+$ curl -X GET "http://172.18.0.40/headers" -H "accept: application/json"                                                                                                                                                            [13:11:31]
+{
+  "headers": {
+    "Accept": "application/json", 
+    "Host": "172.18.0.40", 
+    "User-Agent": "curl/7.68.0", 
+    "X-B3-Sampled": "1", 
+    "X-B3-Spanid": "165c8291946d9062", 
+    "X-B3-Traceid": "60fa94b4ebc5385d165c8291946d9062", 
+    "X-Envoy-Attempt-Count": "1", 
+    "X-Envoy-Decorator-Operation": "httpbin.default.svc.cluster.local:80/*", 
+    "X-Envoy-Internal": "true", 
+    "X-Envoy-Peer-Metadata": "ChQKDkFQUF9DT05UQUlORVJTEgIaAAoaCgpDTFVTVEVSX0lEEgwaCkt1YmVybmV0ZXMKGQoNSVNUSU9fVkVSU0lPThIIGgYxLjEwLjIKvwMKBkxBQkVMUxK0AyqxAwodCgNhcHASFhoUaXN0aW8taW5ncmVzc2dhdGV3YXkKEwoFY2hhcnQSChoIZ2F0ZXdheXMKFAoIaGVyaXRhZ2USCBoGVGlsbGVyCjYKKWluc3RhbGwub3BlcmF0b3IuaXN0aW8uaW8vb3duaW5nLXJlc291cmNlEgkaB3Vua25vd24KGQoFaXN0aW8SEBoOaW5ncmVzc2dhdGV3YXkKGQoMaXN0aW8uaW8vcmV2EgkaB2RlZmF1bHQKMAobb3BlcmF0b3IuaXN0aW8uaW8vY29tcG9uZW50EhEaD0luZ3Jlc3NHYXRld2F5cwohChFwb2QtdGVtcGxhdGUtaGFzaBIMGgo1ZDU3OTU1NDU0ChIKB3JlbGVhc2USBxoFaXN0aW8KOQofc2VydmljZS5pc3Rpby5pby9jYW5vbmljYWwtbmFtZRIWGhRpc3Rpby1pbmdyZXNzZ2F0ZXdheQovCiNzZXJ2aWNlLmlzdGlvLmlvL2Nhbm9uaWNhbC1yZXZpc2lvbhIIGgZsYXRlc3QKIgoXc2lkZWNhci5pc3Rpby5pby9pbmplY3QSBxoFZmFsc2UKGgoHTUVTSF9JRBIPGg1jbHVzdGVyLmxvY2FsCi8KBE5BTUUSJxolaXN0aW8taW5ncmVzc2dhdGV3YXktNWQ1Nzk1NTQ1NC1qYm10cAobCglOQU1FU1BBQ0USDhoMaXN0aW8tc3lzdGVtCl0KBU9XTkVSElQaUmt1YmVybmV0ZXM6Ly9hcGlzL2FwcHMvdjEvbmFtZXNwYWNlcy9pc3Rpby1zeXN0ZW0vZGVwbG95bWVudHMvaXN0aW8taW5ncmVzc2dhdGV3YXkKFwoRUExBVEZPUk1fTUVUQURBVEESAioACicKDVdPUktMT0FEX05BTUUSFhoUaXN0aW8taW5ncmVzc2dhdGV3YXk=", 
+    "X-Envoy-Peer-Metadata-Id": "router~192.168.142.70~istio-ingressgateway-5d57955454-jbmtp.istio-system~istio-system.svc.cluster.local"
+  }
+}
+```
+
 ## 001 - EnvoyFilter CRD
 
 Using EnvoyFilter CRD
 
-## 010 - AuthorizationFilter CUSTOM
+## 010 - AuthorizationPolicy CUSTOM filter 
 
 Using AuthorizationPolicy with `action: CUSTOM`
 
-# Cleaning up
+## Cleaning up
 
 ```
 $ ./hack/cleanup.sh
 $ kind delete cluster --name calico-2021-07-11-sg33lz
 ```
+
+## References
+
+* MetalLB - https://github.com/K8sbykeshed/k8s-service-lb-validator
+* Kind bootstrap - https://github.com/thekubeworld/k8s-local-dev
+* Istio In Action - https://github.com/istioinaction/book-source-code/
+* EnvoyFilter example - https://github.com/thiagocaiubi/playground/tree/main/istio-okta

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang-jwt/jwt"
+	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -39,6 +40,7 @@ func jwtProxyHandler(w http.ResponseWriter, r *http.Request) {
 		body  []byte
 		token string
 	)
+
 	req := &Request{}
 
 	if !checkCookieHeader(r) {
@@ -50,11 +52,14 @@ func jwtProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	req.IssuedAt = time.Now().Add(1 * time.Hour).Unix()
 	if err = json.Unmarshal(body, req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	log.Print(fmt.Sprintf("Request: %+v", req))
 
 	// Sign and get the complete encoded token as a string using the secret
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, req)
@@ -68,6 +73,13 @@ func jwtProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/proxy", jwtProxyHandler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	r := mux.NewRouter()
+	r.PathPrefix("/").HandlerFunc(jwtProxyHandler)
+	srv := &http.Server{
+		Handler:      r,
+		Addr:         ":8080",
+		WriteTimeout: 5 * time.Second,
+		ReadTimeout:  5 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }

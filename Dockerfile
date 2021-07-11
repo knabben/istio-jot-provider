@@ -11,5 +11,4 @@ FROM alpine:latest
 WORKDIR /
 COPY --from=build /proxy /proxy
 EXPOSE 8080
-RUN ls -lah 
 CMD ["/proxy"]
