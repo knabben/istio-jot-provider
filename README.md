@@ -84,11 +84,11 @@ accessed via the Ingress Gateway, the LB external IP is on `172.18.0.40`:
 
 ```
 $ kubectl apply -f service/httpbin.yaml
-$ istioctl -nistio-system proxy-config routes deploy/istio-ingressgateway                                                                                                                                                           [13:08:10]
+$ istioctl -nistio-system proxy-config routes deploy/istio-ingressgateway
 NAME        DOMAINS     MATCH                  VIRTUAL SERVICE
 http.80     *           /*                     httpbin-virtualservice.default
 
-$ curl -X GET "http://172.18.0.40/headers" -H "accept: application/json"                                                                                                                                                            [13:11:31]
+$ curl -X GET "http://172.18.0.40/headers" -H "accept: application/json"
 {
   "headers": {
     "Accept": "application/json", 
@@ -221,7 +221,70 @@ Cleaning up the added final filter.
 
 ```
 $ kubectl -n istio-system delete envoyfilter ext-authz-filter
-$ kubectl delete authorizationpolicy,requestauthentication
+$ kubectl delete authorizationpolicy,requestauthentication --all
+```
+
+## 010 - CUSTOM External authorization policy
+
+Apply the custom policy:
+
+```
+$ kubectl apply -f 10-custom/auth-policy.yaml
+$ http http://172.18.0.40/headers
+403
+```
+
+Looking the istiod logs, it needs the the service yet. It is introduced
+by the global mesh options, set here:
+
+https://istio.io/latest/docs/tasks/security/authorization/authz-custom/#define-the-external-authorizer
+
+```
+2021-07-11T22:22:54.199583Z     error   authorization   Processed authorization policy for httpbin-74fb669cc6-lcg4s.default, 2 errors occurred:
+
+    * failed to process CUSTOM action: available providers are [] but found "ext-authz-service"
+    * failed to parse CUSTOM action, will generate a deny all config: available providers are [] but found "ext-authz-service"
+```
+
+The configuration reference:
+
+https://istio.io/latest/docs/reference/config/istio.mesh.v1alpha1/
+
+Editing the configmap:
+```
+$ kubectl edit configmap istio -n istio-system
+data:                                                                                                                                                                                                                                          
+  mesh: "extensionProviders:
+    - name: "ext-authz-service"
+      envoyExtAuthzHttp:                                                                                                                                                            
+        service: "auth-proxy.istio-system.svc.cluster.local"
+        port: "8080"                                                                                                                                                           
+      includeHeadersInCheck: ["cookie", "sub", "aud", "iss"] 
+      headersToUpstreamOnAllow: ["authorization"]
+ 
+# Restart istiod    
+$ kubectl rollout restart deployment/istiod -n istio-system   
+```
+
+At this point we should be able to send the Bearer token, using
+the authentication service under `auth-proxy.istio-system`, apply the
+same authorization policies and request authentication again: 
+
+```
+# Before applying the AuthorizationPolicy and RequestAuthentication
+$ http 172.18.0.40/anything cookie:mytest
+200
+
+$ kubectl apply -f 01-envoy-filter/req-auth.yaml
+
+$ http 172.18.0.40/anything cookie:mytest
+403 Forbidden
+
+$ http 172.18.0.40/anything cookie:mytest iss:my-issuer sub:subject1
+403 Forbidden
+
+$ http 172.18.0.40/anything cookie:mytest iss:my-issuer sub:subject
+200
 ```
 
 ## Cleaning up istio-system

@@ -1,0 +1,16 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+    name: ext-authz-external
+    namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  action: CUSTOM
+  provider:
+    name: "ext-authz-service"
+  rules:
+    - to:
+        - operation:
+            paths: ["/*"]
