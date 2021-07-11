@@ -199,7 +199,10 @@ selector:
 # AuthorizationPolicy - Allowing a requestPrincipals as issuer and subject: [ "my-issuer/subject" ]
 ```
 
-To test it's working try a few combination for these values:
+* NOTE: Generate the JWK, with the `keys/generate_jwks.py`
+* NOTE2: DONT USE THESE KEYS, generate using openssl.
+
+To test the setup is working try a few a combination for the claims values:
 
 ```
 $ http 172.18.0.40/anything cookie:mytest iss:my-issuer sub:my-subject
@@ -218,6 +221,7 @@ Cleaning up the added final filter.
 
 ```
 $ kubectl -n istio-system delete envoyfilter ext-authz-filter
+$ kubectl delete authorizationpolicy,requestauthentication
 ```
 
 ## Cleaning up istio-system
@@ -232,5 +236,5 @@ $ kind delete cluster --name calico-2021-07-11-sg33lz
 * MetalLB - https://github.com/K8sbykeshed/k8s-service-lb-validator
 * Kind bootstrap - https://github.com/thekubeworld/k8s-local-dev
 * Istio In Action - https://github.com/istioinaction/book-source-code/
-*https://istio.io/latest/docs/tasks/security/authorization/authz-jwt/
+* AuthZ JWT https://istio.io/latest/docs/tasks/security/authorization/authz-jwt/
 * EnvoyFilter example - https://github.com/thiagocaiubi/playground/tree/main/istio-okta
