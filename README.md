@@ -43,10 +43,7 @@ Is expected to receive a `Cookie: anyvalue` header and the reponse will return a
 
 ```
 Audience  string `json:"aud,omitempty"`
-ExpiresAt int64  `json:"exp,omitempty"`
-Id        string `json:"jti,omitempty"`
 Issuer    string `json:"iss,omitempty"`
-NotBefore int64  `json:"nbf,omitempty"`
 Subject   string `json:"sub,omitempty"`
 ```
 
@@ -149,15 +146,14 @@ HTTP/1.1 401 Unauthorized
 
 # -- With authentication
 
-$ http 172.18.0.40/anything cookie:anyvalue sub:subject aud:audience iss:issuer
+$ http 172.18.0.40/anything cookie:anyvalue iss:my-issuer sub:my-subject
 HTTP/1.1 200 OK
 
 {
     "headers": {
-        "Authorization": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImV4cCI6MTYyNjAyNzIyMCwiaWF0IjoxNjI2MDIzNjIwLCJpc3MiOiJpc3N1ZXIiLCJzdWIiOiJzdWJqZWN0In0.YyAwJsP2wRZLA6MXVvbqaVcqRCeHrbK7rPRkBUrkEZ0",
+        "Authorization": "Bearer eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MjYwNDI4NjksImlhdCI6MTYyNjAzOTI2OSwiaXNzIjoibXktaXNzdWVyIiwic3ViIjoibXktc3ViamVjdCJ9.Y5Caeltn-1ZbDfEt0byq9_MW-N0_axPI4Rq6UBc0z1bY_BXGeiY_K0H3XLqtnvjw6hjwhz-yD9utPSUoBRpjpI9s9rUsMRO1zvxWz81DgiJUOcjftoVIshLdl1rHZYC1PqP6cJ2oadpHuiGpp7afIrrYBHULMyX27qYYuruwgz05552a5SdHtezTyFEKKvBVrFS_p7upkRsCfIKK3MHBcmeRZBoUXUtZ19fbW_vaGdxo-VU4TqJhWoYbwi93F0bdlkIIf_Eec-1Qww9hB2IjVw-ezruN_oCfQh1uw4Cp1mVEx-ElxoUJb-sajOTaaeClNBPKlh8jGS9HE-boV1i9DcPm-OI9A63KJuZqq2Zco3HoyoUiWODRLHoNGrp8blLBfpvAisexiQtKAiLXPcfIP1LBsWIkHqg1NthIiGpC5DKzN9oNy_dFx17JR1MymoXSTT9KwpTdD7CVWWnuoKKysOTDcZnhF2FFfMo0ubEYhkB89gbSaUUubTbrxbZJlBhX-IpHaK-cbzRWeDDLIufyojc2dlQayA-9ku_uswO6S-JfIBaMDB4cmxBAutxvWRyGdOzx9yIzxpgMEsU9VwcHU1QQh_xRiPl6FmONLj1mK_u0e-XFpJbnc3k5D5FnQYzVJHovn1-z2RbzJjM41fvgJQbNahP-WSCVK0HzH7ITu9A"
     }
 }
-
 ```
 
 Analyzing the JWT data generated:
@@ -166,18 +162,17 @@ Analyzing the JWT data generated:
 # Header
 
 {
-  "alg": "HS256",
+  "alg": "RS512",
   "typ": "JWT"
 }
 
 # Payload
 
 {
-  "aud": "audience",
-  "exp": 1626027220,
-  "iat": 1626023620,
-  "iss": "issuer",
-  "sub": "subject"
+  "exp": 1626042869,
+  "iat": 1626039269,
+  "iss": "my-issuer",
+  "sub": "my-subject"
 }
 
 ```
@@ -185,7 +180,38 @@ Analyzing the JWT data generated:
 Forcing the policy in the service:
 
 ```
+$ kubectl apply -f 01-envoy-filter/req-auth.yaml
+```
 
+This will apply some objects in the httpbin service:
+
+```
+# RequestAuthentication with a JWT set, and an issuer defined.
+selector:
+    matchLabels:
+      app: httpbin
+  jwtRules:
+    - issuer: "my-issuer"
+      jwks: |
+        {"keys": [{"kty": ...
+        
+# AuthorizationPolicy - Denying all requests
+# AuthorizationPolicy - Allowing a requestPrincipals as issuer and subject: [ "my-issuer/subject" ]
+```
+
+To test it's working try a few combination for these values:
+
+```
+$ http 172.18.0.40/anything cookie:mytest iss:my-issuer sub:my-subject
+200
+
+# Wrong subject
+$ http 172.18.0.40/anything cookie:mytest iss:my-issuer sub:wrong-subject
+403 Forbidden - RBAC: access denied
+
+# Wrong issuer
+$ http 172.18.0.40/anything cookie:mytest iss:wrong-issuer sub:wrong-subject
+401 Unauthorized - Jwt is not configured 
 ```
 
 Cleaning up the added final filter.

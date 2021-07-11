@@ -8,16 +8,14 @@ spec:
     matchLabels:
       app: httpbin
   jwtRules:
-    - issuer: "issuer"
-      forwardOriginalToken: true
-      fromHeaders:
-        - name: Authorization
-          prefix: "JWT "
+    - issuer: "my-issuer"
+      jwks: |
+        {"keys": [{"kty": "RSA", "n": "qspXrOTbDwir9StJEUjgwv8DJE8IfJQGMOnCZJjBIrmNGkD0Jq73S8Ql9BX1-RC2GD5HGIM_PYIeDeZpZoLa1wFJe-zfgCeoWOj4fmfm2Wq1ATuhX4FFDp-wfKk5iug65pUJf-TyVFH6K0X0uUFHJF9F4RxFxGigz446kzPaNBNSMecrc40OTKxL5nosrus56OnnosoyvMR2zn0BhARyJe3AeZsHB5JaeSkmpq9F7tgg-HxQDRVXUcOj_-7i_ghvHZSupUdFRIZ9hAcUOhopxOXby4hfe6EKuJMVyXeu8iSQnAkFdATUjqB_YTe5S7Im1UQYz5-hmvAqlw7mkmb3xxP5W2y3Wco6UA8Zkd8u30IrbnK8__fItfRVq2lppkDRpCUeds2g26FldWldidv3dVyqmZN_zq9woBC8jsE9LDcTX9auJaOSX8fI1odecFM4EXlPZfymQIxQqo8DYXx5ZmwJgyIqlvz0EybCKfetgNBpB1q0s_0zYakFfrXKEYSm8SIttGT-bq0_qA3NYuzSRSRGa-Dnu-06dizsBweP3LNBmDtW9idLoEZgC87hwxPAnxnt6ZtwejIiZFQhubSjuZ1Y8XH6rsJlh4AAHHU7zRFMQnlw5T93SuSaUXsS_5V4gUYQkDafbg9r-U6zJgouyIui3_-OwGi5Qg8Hp-bN0XE", "e": "AQAB"}]}
 ---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: app-gw
+  name: deny-all
   namespace: default
 spec:
   selector:
@@ -27,7 +25,7 @@ spec:
   rules:
     - from:
       - source:
-          notRequestPrincipals: ["*"]
+          notRequestPrincipals: [ "*" ]
 ---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
@@ -38,11 +36,11 @@ spec:
   action: ALLOW
   selector:
     matchLabels:
-      app: httpbin  # default ingress
+      app: httpbin
   rules:
     - from:
       - source:
-          requestPrincipals: [ "issuer/*" ]
+          requestPrincipals: [ "my-issuer/subject" ]
       to:
         - operation:
             methods: ["GET", "POST"]
